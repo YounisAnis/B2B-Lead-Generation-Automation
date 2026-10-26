@@ -1,0 +1,591 @@
+{
+  "name": "WF2 - Google Opening Discovery",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "dc2daa2b-0579-42a0-b291-d88f123d0f7a",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        64,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "18f135d2-5f55-4203-b018-50c5a38fd547",
+              "name": "sheetId",
+              "value": "14SNQmzeVVXuveOeI5y23E1hyr31ozy0_xdyoyC0VcdQ",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f7537aa9-93c6-4f36-b110-065ae1e62dd1",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        288,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Run_Config",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "cac935d6-5840-4877-abcc-0357b48ba82c",
+      "name": "Read Run_Config",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        416,
+        496
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HOGPL2ZStkAecwIj",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Search_Queue",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "7aa368dd-e28a-46db-965a-b31d7328be61",
+      "name": "Read Search_Queue",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        560,
+        496
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HOGPL2ZStkAecwIj",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Opening_Candidates",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "c13b0efc-920f-4962-a9bc-f2cd62399055",
+      "name": "Read Opening_Candidates",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        720,
+        480
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HOGPL2ZStkAecwIj",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = {};\n$('Read Run_Config').all().forEach((i) => { if (i.json.Setting) cfg[String(i.json.Setting).trim()] = i.json.Value; });\nconst limit = parseInt(cfg.Searches_Per_Run, 10) || 5;\n\nconst pending = $('Read Search_Queue').all()\n  .map((i) => i.json)\n  .filter((r) => r.Search_ID && String(r.Status || '').trim() === 'Pending')\n  .slice(0, limit);\n\nreturn pending.map((r) => ({\n  json: { Search_ID: r.Search_ID, City: r.City, Keyword: r.Keyword, Mode: r.Mode, Query: r.Query },\n}));"
+      },
+      "id": "c5d1b834-d1f5-4d83-86a4-9ba6242a8b16",
+      "name": "Pick Pending",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://serpapi.com/search.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "engine",
+              "value": "google"
+            },
+            {
+              "name": "q",
+              "value": "={{ $json.Query }}"
+            },
+            {
+              "name": "google_domain",
+              "value": "google.co.uk"
+            },
+            {
+              "name": "gl",
+              "value": "uk"
+            },
+            {
+              "name": "hl",
+              "value": "en"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1
+            }
+          }
+        }
+      },
+      "id": "d02f01c4-109c-4bcb-81cd-3c3ea500c0ca",
+      "name": "SerpApi Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        512
+      ],
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "sOpqBCvTFJ5zwBjf",
+          "name": "Query Auth account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = {};\n$('Read Run_Config').all().forEach((i) => { if (i.json.Setting) cfg[String(i.json.Setting).trim()] = i.json.Value; });\nconst perQuery = Math.min(parseInt(cfg.Results_Per_Query, 10) || 10, 10);\nconst upDays = parseInt(cfg.Upcoming_Window_Days, 10) || 90;\nconst recDays = parseInt(cfg.Recent_Window_Days, 10) || 30;\n\n// --- AUTO FILTER (junk pehle hi Rejected mark ho jaye) ---\nconst BAD_DOMAINS = ['nhs.uk', 'gov.uk', 'ac.uk', 'tate.org.uk', 'indeed.com', 'glassdoor.co.uk', 'reed.co.uk', 'totaljobs.com', 'yell.com', 'wikipedia.org'];\nconst BAD_WORDS = /\\b(careers?|jobs?|vacanc\\w*|opening hours|opening times|pharmacy first|find a pharmacy|store locator|near me)\\b/i;\nconst hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\\./, '').toLowerCase(); } catch (e) { return ''; } };\nconst autoReason = (o, mode) => {\n  const h = hostOf(o.link);\n  if (BAD_DOMAINS.some((d) => h === d || h.endsWith('.' + d))) return 'AUTO: irrelevant site (' + h + ')';\n  if (BAD_WORDS.test((o.title || '') + ' ' + (o.snippet || ''))) return 'AUTO: irrelevant page (jobs/hours/directory)';\n  const dateStr = String(o.date || '');\n  if (/years? ago/i.test(dateStr)) return 'AUTO: old article (' + dateStr + ')';\n  const t = Date.parse(dateStr);\n  if (!isNaN(t)) {\n    const age = (Date.now() - t) / 86400000;\n    const win = mode === 'Upcoming' ? upDays : recDays;\n    if (age > win) return 'AUTO: old article (' + dateStr + ')';\n  }\n  return '';\n};\n\nconst norm = (u) => {\n  try {\n    const x = new URL(String(u).trim());\n    return (x.hostname.replace(/^www\\./, '') + x.pathname).replace(/\\/+$/, '').toLowerCase();\n  } catch (e) {\n    return String(u || '').trim().toLowerCase();\n  }\n};\nconst hash = (s) => {\n  let h = 5381;\n  for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;\n  return h.toString(16).padStart(8, '0');\n};\nconst errorOf = (r) => {\n  if (!r || !r.error) return '';\n  return typeof r.error === 'string' ? r.error : (r.error.message || JSON.stringify(r.error));\n};\nconst isZero = (msg) => /hasn't returned any results/i.test(msg);\n\nconst picks = $('Pick Pending').all().map((i) => i.json);\nconst existing = new Set(\n  $('Read Opening_Candidates').all().map((i) => norm(i.json.Source_URL)).filter(Boolean)\n);\nconst seen = new Set();\nconst today = new Date().toISOString().slice(0, 10);\nconst out = [];\n\n$input.all().forEach((it, idx) => {\n  const q = picks[idx];\n  if (!q) return;\n  const r = it.json || {};\n  const msg = errorOf(r);\n  if (msg && !isZero(msg)) return; // Error query: koi candidate save nahi hoga\n  (r.organic_results || []).slice(0, perQuery).forEach((o) => {\n    if (!o.link) return;\n    const key = norm(o.link);\n    if (existing.has(key) || seen.has(key)) return; // duplicate source URL\n    seen.add(key);\n    const reason = autoReason(o, q.Mode);\n    out.push({\n      json: {\n        Candidate_ID: 'C-' + hash(key),\n        Search_ID: q.Search_ID,\n        City: q.City,\n        Keyword: q.Keyword,\n        Mode: q.Mode,\n        Title: o.title || '',\n        Snippet: o.snippet || '',\n        Source_URL: o.link,\n        Source_Date: o.date || '',\n        Found_On: today,\n        Review_Status: reason ? 'Rejected' : 'New',\n        Business_Name: '',\n        Location: '',\n        Opening_Date: '',\n        Reviewer_Notes: reason,\n        Processed: '',\n      },\n    });\n  });\n});\n\nif (!out.length) return [{ json: { _empty: true } }];\nreturn out;"
+      },
+      "id": "a2dce34e-15d3-423b-b44e-a1ec9faf0ce0",
+      "name": "Parse Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "57ee05cd-e009-42c7-bebf-f20686734721",
+              "leftValue": "={{ $json._empty ? 'empty' : 'ok' }}",
+              "rightValue": "ok",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4e45eab4-8aed-41ce-9385-6d73c5fe8f6e",
+      "name": "Has Candidates?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1488,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Opening_Candidates",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "65d9908e-2864-481b-862d-b88af422ecaa",
+      "name": "Save to Opening_Candidates",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1856,
+        496
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HOGPL2ZStkAecwIj",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = {};\n$('Read Run_Config').all().forEach((i) => { if (i.json.Setting) cfg[String(i.json.Setting).trim()] = i.json.Value; });\nconst perQuery = Math.min(parseInt(cfg.Results_Per_Query, 10) || 10, 10);\n\nconst errorOf = (r) => {\n  if (!r || !r.error) return '';\n  return typeof r.error === 'string' ? r.error : (r.error.message || JSON.stringify(r.error));\n};\nconst isZero = (msg) => /hasn't returned any results/i.test(msg);\n\nconst picks = $('Pick Pending').all().map((i) => i.json);\nconst resp = $('SerpApi Search').all().map((i) => i.json);\nconst now = new Date().toISOString();\n\nreturn picks.map((q, idx) => {\n  const r = resp[idx] || {};\n  const msg = errorOf(r);\n  if (msg && !isZero(msg)) {\n    return { json: { Search_ID: q.Search_ID, Status: 'Error', Results_Count: '', Last_Run: now, Error_Message: String(msg).slice(0, 200) } };\n  }\n  const n = Math.min((r.organic_results || []).length, perQuery);\n  return { json: { Search_ID: q.Search_ID, Status: 'Completed', Results_Count: n, Last_Run: now, Error_Message: '' } };\n});"
+      },
+      "id": "7cfeb710-c29a-41b1-868c-48dc37bfc865",
+      "name": "Build Status Updates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2224,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Search_Queue",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "Search_ID"
+          ],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "ad1ee537-72d5-42e4-a85b-f6690fa12321",
+      "name": "Update Search_Queue Status",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2400,
+        496
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HOGPL2ZStkAecwIj",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "# Workflow 2 — Google Opening Discovery\n\n**What it does:** This workflow takes the **Pending** searches from the `Search_Queue` tab and searches them on Google using SerpApi. It then saves the possible opening announcement links in the `Opening_Candidates` tab.\n\n**Limits:** Each run can process up to **5 search queries**, and each query can return up to **10 organic results**. You can change these limits in the `Run_Config` tab.\n\n**Important:** Google search results are only possible evidence. They do not confirm that a business is actually opening.\n\n**Status:** If a search runs successfully, its status changes to `Completed`. If something goes wrong, it changes to `Error`. If no results are found, it still shows `Completed`, but the result count will be `0`.",
+        "height": 270,
+        "width": 1180,
+        "color": "#E0C2FF"
+      },
+      "id": "9b32e183-0d1f-479f-9a90-0b88754783da",
+      "name": "Sticky 13",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Start\n\nThis workflow starts manually. To test it, just click **Execute Workflow**.",
+        "height": 348,
+        "width": 260,
+        "color": "#95F3ED"
+      },
+      "id": "84db3169-3758-419f-bf79-557b008c6d81",
+      "name": "Sticky 14",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 1. Read Config and Data\n\nFirst, open the **Config** node and paste your Google Sheet ID.\n\nThen, select your Google account credentials in all Google Sheets nodes.",
+        "height": 348,
+        "width": 592,
+        "color": "#EABEBE"
+      },
+      "id": "cf816d49-e870-445f-bfa6-fcec67c0eb3e",
+      "name": "Sticky 15",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        272,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 2. Get Pending Queries\n\nThis step picks the first **Pending** search queries from the `Search_Queue` tab. By default, it picks up to **5 queries**.\n\nIf there are no Pending queries, the workflow stops here.",
+        "height": 348,
+        "width": 260,
+        "color": "#D6F0D1"
+      },
+      "id": "a94c00bb-ffc7-4b62-a94b-99c3e90bfbf9",
+      "name": "Sticky 16",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        880,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 3. Google Search and Results\n\nThis step searches Google UK using **SerpApi**.\n\nIf a search fails, the workflow will not stop. It will simply mark that query as `Error` and continue with the others.\n\nIt also removes duplicate URLs, so the same link will not be saved again if it already exists or appears more than once in the new results.",
+        "height": 348,
+        "width": 500,
+        "color": 2
+      },
+      "id": "d9db4218-a7ae-4a35-887f-6c1ad7c8202b",
+      "name": "Sticky 17",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 4. Save Candidates\n\nEach new link is saved as a separate row in the `Opening_Candidates` tab with `Review_Status = New`.\n\nThe workflow first saves the candidates and then updates the query status.\n\nIf saving fails, the queries will stay as `Pending`, so they can be tried again later.",
+        "height": 342,
+        "width": 500,
+        "color": "#78E1E3"
+      },
+      "id": "8021c1ef-b27e-4bd1-904e-0e182b4c1ee4",
+      "name": "Sticky 18",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1680,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 5. Update Status\n\nThis step updates each query with its status (`Completed` or `Error`), `Results_Count`, and `Last_Run`.\n\nIf a query fails and you want to run it again, just open the Google Sheet and change its status back to `Pending`.",
+        "height": 348,
+        "width": 380
+      },
+      "id": "38930907-bf06-4b5f-9644-a9f899c11622",
+      "name": "Sticky 19",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2208,
+        320
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Read Run_Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Run_Config": {
+      "main": [
+        [
+          {
+            "node": "Read Search_Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Search_Queue": {
+      "main": [
+        [
+          {
+            "node": "Read Opening_Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Opening_Candidates": {
+      "main": [
+        [
+          {
+            "node": "Pick Pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Pending": {
+      "main": [
+        [
+          {
+            "node": "SerpApi Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SerpApi Search": {
+      "main": [
+        [
+          {
+            "node": "Parse Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Results": {
+      "main": [
+        [
+          {
+            "node": "Has Candidates?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Candidates?": {
+      "main": [
+        [
+          {
+            "node": "Save to Opening_Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Status Updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to Opening_Candidates": {
+      "main": [
+        [
+          {
+            "node": "Build Status Updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Status Updates": {
+      "main": [
+        [
+          {
+            "node": "Update Search_Queue Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "7361cbe7-3324-456c-a5fd-824ea4147126",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9b00b285939f3e60f6172b7f7d664e90fce7b6be40851e99f4ec1c23a3299d9b"
+  },
+  "nodeGroups": [],
+  "id": "P9qaevpTneN6geKc",
+  "tags": []
+}

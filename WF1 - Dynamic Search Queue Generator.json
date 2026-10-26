@@ -1,0 +1,499 @@
+{
+  "name": "WF1 - Dynamic Search Queue Generator",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "d854100c-4e51-4000-9c82-641b8311c00b",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        64,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d23f0824-128b-4f33-8c5c-7fd0a6a3a450",
+              "name": "sheetId",
+              "value": "14SNQmzeVVXuveOeI5y23E1hyr31ozy0_xdyoyC0VcdQ",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "94046a7e-b99b-40d8-9e28-d70278d057b2",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        272,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Cities",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "ad269891-e858-4a5e-bf32-30533e3507fd",
+      "name": "Read Cities",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        400,
+        480
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HOGPL2ZStkAecwIj",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Keywords",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "651f69d4-b764-48d3-9b3f-f27ba05871fa",
+      "name": "Read Keywords",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        528,
+        480
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HOGPL2ZStkAecwIj",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Run_Config",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "def392a3-9470-42ec-867e-11f18548a35a",
+      "name": "Read Run_Config",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        672,
+        480
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HOGPL2ZStkAecwIj",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Search_Queue",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "0f0a23a8-e937-4ca2-96ba-2344d4926093",
+      "name": "Read Search_Queue",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        816,
+        480
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HOGPL2ZStkAecwIj",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = (name) => $(name).all().map((i) => i.json);\nconst isYes = (v) => ['yes', 'y', 'true', '1'].includes(String(v === undefined || v === null ? '' : v).trim().toLowerCase());\nconst slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');\n\n// 1) Active cities + keywords\nconst cities = rows('Read Cities').filter((r) => r.City && isYes(r.Active)).map((r) => String(r.City).trim());\nconst keywords = rows('Read Keywords').filter((r) => r.Keyword && isYes(r.Active)).map((r) => String(r.Keyword).trim());\nif (!cities.length) throw new Error('Cities tab mein koi city Active = Yes nahi hai.');\nif (!keywords.length) throw new Error('Keywords tab mein koi keyword Active = Yes nahi hai.');\n\n// 2) Run_Config (Setting / Value)\nconst cfg = {};\nrows('Read Run_Config').forEach((r) => { if (r.Setting) cfg[String(r.Setting).trim()] = r.Value; });\nconst modeRaw = String(cfg.Opening_Mode || 'Upcoming').trim().toLowerCase();\nlet modes;\nif (modeRaw === 'upcoming') modes = ['upcoming'];\nelse if (modeRaw === 'recently opened' || modeRaw === 'recent') modes = ['recent'];\nelse if (modeRaw === 'both') modes = ['upcoming', 'recent'];\nelse throw new Error('Run_Config > Opening_Mode galat hai. Sirf: Upcoming / Recently Opened / Both');\n\nconst patterns = {\n  upcoming: ['opening soon', 'coming soon', 'new opening', 'opens next month'],\n  recent: ['now open', 'recently opened', 'newly opened', 'grand opening'],\n};\nconst modeLabel = { upcoming: 'Upcoming', recent: 'Recently Opened' };\n\n// 3) ISO week (e.g. 2026-W43) -> same week dobara run = same Search_ID\nconst isoWeek = (d) => {\n  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));\n  const day = t.getUTCDay() || 7;\n  t.setUTCDate(t.getUTCDate() + 4 - day);\n  const y = t.getUTCFullYear();\n  const w = Math.ceil(((t - new Date(Date.UTC(y, 0, 1))) / 86400000 + 1) / 7);\n  return y + '-W' + String(w).padStart(2, '0');\n};\nconst week = isoWeek(new Date());\n\n// 4) Already-existing queries (duplicate-safe)\nconst existing = new Set(rows('Read Search_Queue').map((r) => r.Search_ID).filter(Boolean));\n\nconst out = [];\nfor (const city of cities) {\n  for (const keyword of keywords) {\n    for (const m of modes) {\n      patterns[m].forEach((p, idx) => {\n        const id = [week, slug(city), slug(keyword), m, 'p' + (idx + 1)].join('_');\n        if (existing.has(id)) return;\n        existing.add(id);\n        out.push({\n          json: {\n            Search_ID: id,\n            Week: week,\n            City: city,\n            Keyword: keyword,\n            Mode: modeLabel[m],\n            Pattern_No: idx + 1,\n            Query: '\"' + keyword + '\" \"' + city + '\" \"' + p + '\"',\n            Status: 'Pending',\n            Results_Count: '',\n            Last_Run: '',\n            Error_Message: '',\n          },\n        });\n      });\n    }\n  }\n}\nreturn out;"
+      },
+      "id": "68e12761-e593-4140-9645-6af0ee703d1a",
+      "name": "Generate Queries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1424,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Search_Queue",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Search_ID",
+              "displayName": "Search_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Week",
+              "displayName": "Week",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "City",
+              "displayName": "City",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Keyword",
+              "displayName": "Keyword",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Mode",
+              "displayName": "Mode",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Pattern_No",
+              "displayName": "Pattern_No",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Query",
+              "displayName": "Query",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Results_Count",
+              "displayName": "Results_Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Last_Run",
+              "displayName": "Last_Run",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Error_Message",
+              "displayName": "Error_Message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "83c990cc-d56b-45b9-ad25-88ce9511532e",
+      "name": "Save to Search_Queue",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1952,
+        464
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HOGPL2ZStkAecwIj",
+          "name": "Google Sheets account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "content": "# Workflow 1 — Dynamic Search Queue Generator\n\n**What it does:** This workflow creates Google search tasks using different cities, keywords, and search patterns. It only prepares the searches. It does not actually search on Google.\n\n**Input:** It takes data from three Google Sheets tabs: `Cities`, `Keywords`, and `Run_Config`.\n\n**Output:** It adds all the search tasks to the `Search_Queue` tab with the status `Pending`.\n\n**Example:** If we have 2 cities, 2 keywords, and 4 search patterns, the workflow will create **16 search tasks**.",
+        "height": 250,
+        "width": 1100,
+        "color": 4
+      },
+      "id": "d2a24770-5ac1-49d5-9dbb-1a958a913256",
+      "name": "Sticky 9",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Start\n\nThis workflow starts manually. To test it, just click **Execute Workflow**.",
+        "height": 332,
+        "width": 228,
+        "color": "#E3D4D4"
+      },
+      "id": "dbde0539-731c-49db-ab4c-49d9824c2751",
+      "name": "Sticky 10",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -16,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 1. Read Config and Google Sheets Data\n\nFirst, open the **Config** node and paste your Google Sheet ID. You can find it in your Google Sheet URL, just after `/d/`.\n\nThen, select your Google account credentials in each Google Sheets node.\n\nAll 4 read nodes are set to **Execute Once**, so each node will run only one time.",
+        "height": 332,
+        "width": 812,
+        "color": 5
+      },
+      "id": "20a318a9-89e4-4f19-9b49-79c23db9ee8b",
+      "name": "Sticky 11",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 2. Create Search Queries\n\nThis step creates search queries using all cities and keywords where `Active = Yes`, along with 4 search patterns.\n\nYou can choose the search mode from `Run_Config > Opening_Mode`. The options are **Upcoming**, **Recently Opened**, or **Both**.\n\nIt also checks for duplicates. So, if you run the workflow again in the same week, it will not create the same `Search_ID` again.",
+        "height": 332,
+        "width": 792,
+        "color": 3
+      },
+      "id": "463c97c5-7fc5-4f04-b34d-2a8c10b29d02",
+      "name": "Sticky 12",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 3. Save Tasks\n\nAll new search tasks are added to the `Search_Queue` tab with the status **Pending**.\n\nOnce this is done, we can move to **Workflow 2**.",
+        "height": 332,
+        "width": 252,
+        "color": 6
+      },
+      "id": "cf52295f-4e96-43fa-93cf-161cdadd372f",
+      "name": "Sticky 13",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1888,
+        304
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Read Cities",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Cities": {
+      "main": [
+        [
+          {
+            "node": "Read Keywords",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Keywords": {
+      "main": [
+        [
+          {
+            "node": "Read Run_Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Run_Config": {
+      "main": [
+        [
+          {
+            "node": "Read Search_Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Search_Queue": {
+      "main": [
+        [
+          {
+            "node": "Generate Queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Queries": {
+      "main": [
+        [
+          {
+            "node": "Save to Search_Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "0bea5ea1-9ce1-444e-851b-a9ead65f6f3a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9b00b285939f3e60f6172b7f7d664e90fce7b6be40851e99f4ec1c23a3299d9b"
+  },
+  "nodeGroups": [],
+  "id": "hq2vnGtBUoW6epAR",
+  "tags": []
+}

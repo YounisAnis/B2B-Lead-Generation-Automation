@@ -1,0 +1,841 @@
+{
+  "name": "WF3 - Contact Enrichment",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "dc93b96b-cb3f-453f-ba3f-4b1bd4a20dfb",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        64,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ae658f33-fe3b-490b-93f4-48b3a5aa3c81",
+              "name": "sheetId",
+              "value": "14SNQmzeVVXuveOeI5y23E1hyr31ozy0_xdyoyC0VcdQ",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "05e15744-f338-4d90-a60f-37b8c4617e74",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        288,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Run_Config",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "6de5148a-1e55-4db4-8ffa-70f6edaad3be",
+      "name": "Read Run_Config",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        416,
+        512
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HOGPL2ZStkAecwIj",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Opening_Candidates",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "63604021-f870-4f19-873d-2b45a9c65445",
+      "name": "Read Opening_Candidates",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        544,
+        512
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HOGPL2ZStkAecwIj",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Business_Leads",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "5d05d6df-1bf2-4559-9e00-49effd2a7875",
+      "name": "Read Business_Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        688,
+        512
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HOGPL2ZStkAecwIj",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = {};\n$('Read Run_Config').all().forEach((i) => { if (i.json.Setting) cfg[String(i.json.Setting).trim()] = i.json.Value; });\nconst limit = parseInt(cfg.Contacts_Per_Run, 10) || 5;\n\nconst clean = (s) => String(s || '').toLowerCase().replace(/\\b(ltd|limited|the)\\b/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();\n\nconst approved = $('Read Opening_Candidates').all()\n  .map((i) => i.json)\n  .filter((r) =>\n    r.Candidate_ID &&\n    String(r.Review_Status || '').trim() === 'Approved' &&\n    String(r.Processed || '').trim().toLowerCase() !== 'yes' &&\n    String(r.Business_Name || '').trim() !== ''\n  );\n\nconst seenVenue = new Set();\nconst out = [];\nfor (const r of approved) {\n  const key = [r.Business_Name, r.City, r.Location].map(clean).join('|');\n  if (seenVenue.has(key)) continue; // ek run mein ek venue sirf ek baar\n  seenVenue.add(key);\n  out.push({\n    json: {\n      Candidate_ID: r.Candidate_ID,\n      Business_Name: String(r.Business_Name).trim(),\n      City: r.City || '',\n      Business_Type: r.Keyword || '',\n      Location: r.Location || '',\n      Opening_Status: String(r.Mode || '').trim() === 'Upcoming' ? 'Upcoming' : 'Recently Opened',\n      Opening_Date: r.Opening_Date || '',\n      Source_URL: r.Source_URL || '',\n    },\n  });\n  if (out.length >= limit) break;\n}\nreturn out;"
+      },
+      "id": "4b22ddf6-918a-41c2-b187-22d4b653c798",
+      "name": "Pick Approved",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://serpapi.com/search.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "engine",
+              "value": "google"
+            },
+            {
+              "name": "q",
+              "value": "={{ [$json.Business_Name, $json.Location, $json.City, 'official website'].filter(Boolean).join(' ') }}"
+            },
+            {
+              "name": "google_domain",
+              "value": "google.co.uk"
+            },
+            {
+              "name": "gl",
+              "value": "uk"
+            },
+            {
+              "name": "hl",
+              "value": "en"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1
+            }
+          }
+        }
+      },
+      "id": "cc88fdb0-f041-4caf-970a-fd5961226b72",
+      "name": "Search Website",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        512
+      ],
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "sOpqBCvTFJ5zwBjf",
+          "name": "Query Auth account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const ctx = $('Pick Approved').item.json;\nconst results = ($json && $json.organic_results) || [];\n\n// Directory / social / news sites official website nahi hoti\nconst blocked = [\n  'facebook.com', 'instagram.com', 'linkedin.com', 'tiktok.com', 'twitter.com', 'x.com', 'youtube.com',\n  'tripadvisor.com', 'tripadvisor.co.uk', 'yelp.com', 'yelp.co.uk', 'trustpilot.com', 'wikipedia.org',\n  'checkatrade.com', 'yell.com', 'pinterest.com', 'reddit.com', 'eventbrite.co.uk', 'ubereats.com',\n  'deliveroo.co.uk', 'just-eat.co.uk', 'bbc.co.uk', 'bbc.com', 'gumtree.com', 'rightmove.co.uk',\n  'zoopla.co.uk', 'linktr.ee', 'nhs.uk', 'gov.uk', 'google.com', 'google.co.uk',\n];\nconst hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\\./, '').toLowerCase(); } catch (e) { return ''; } };\nconst isBlocked = (h) => !h || blocked.some((d) => h === d || h.endsWith('.' + d));\n\nlet website = '';\nfor (const o of results) {\n  const h = hostOf(o.link);\n  if (!isBlocked(h)) { website = new URL(o.link).origin; break; }\n}\nreturn { json: { ...ctx, website } };"
+      },
+      "id": "5fe9b83b-6b7d-400f-a738-c68e47c1a6a7",
+      "name": "Pick Website",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1456,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.website || 'https://no-website-found.invalid' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (compatible; LeadFinderBot/1.0)"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "98d9f2f5-95ec-45ce-98ab-bb658d4206b9",
+      "name": "Fetch Homepage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1712,
+        512
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const ctx = $('Pick Website').item.json;\nconst raw = $json.data;\nconst html = typeof raw === 'string' ? raw : '';\nlet contactUrl = '';\n\nif (ctx.website && html) {\n  const base = new URL(ctx.website);\n  const re = /href=[\"']([^\"'#]*contact[^\"'#]*)[\"']/gi;\n  let m;\n  while ((m = re.exec(html))) {\n    if (/^(mailto:|tel:)/i.test(m[1])) continue;\n    try {\n      const u = new URL(m[1], ctx.website);\n      if (u.hostname === base.hostname) { contactUrl = u.href; break; }\n    } catch (e) { /* ignore */ }\n  }\n}\nreturn { json: { ...ctx, contactUrl } };"
+      },
+      "id": "5f38c531-e844-4fd7-b4c3-46eb27f1b10d",
+      "name": "Find Contact Page",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1872,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.contactUrl || $json.website || 'https://no-website-found.invalid' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (compatible; LeadFinderBot/1.0)"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "359f5ff0-b676-4254-b9e0-24254bc0d5ba",
+      "name": "Fetch Contact Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2048,
+        512
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const ctx = $('Find Contact Page').item.json;\nconst homeRaw = $('Fetch Homepage').item.json.data;\nconst home = typeof homeRaw === 'string' ? homeRaw : '';\nconst contact = typeof $json.data === 'string' ? $json.data : '';\nconst today = new Date().toISOString().slice(0, 10);\n\nconst clean = (s) => String(s || '').toLowerCase().replace(/\\b(ltd|limited|the)\\b/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();\nconst visible = (h) => h.replace(/<script[\\s\\S]*?<\\/script>/gi, ' ').replace(/<style[\\s\\S]*?<\\/style>/gi, ' ').replace(/<[^>]+>/g, ' ');\n\n// 1) Website identity check: homepage par business ka naam milna chahiye\nconst nameClean = clean(ctx.Business_Name);\nconst tokens = nameClean.split(' ').filter((t) => t.length > 2);\nconst homeText = clean(visible(home));\nconst identity = !!(ctx.website && home && nameClean && (homeText.includes(nameClean) || (tokens.length > 0 && tokens.every((t) => homeText.includes(t)))));\n\n// 2) Public contacts nikaalo (sirf identity confirm ho to)\nconst host = ctx.website ? new URL(ctx.website).hostname.replace(/^www\\./, '') : '';\nconst findEmails = (h) => {\n  const list = [];\n  (h.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi) || []).forEach((e) => {\n    e = e.toLowerCase();\n    if (/\\.(png|jpe?g|gif|webp|svg|css|js)$/.test(e)) return;\n    if (/(example|sentry|wixpress|domain\\.com|yourdomain|email\\.com)/.test(e)) return;\n    if (!list.includes(e)) list.push(e);\n  });\n  return list;\n};\nconst findPhones = (h) => {\n  const list = [];\n  const seen = [];\n  const add = (p) => {\n    const digits = String(p).replace(/\\D/g, '');\n    if (digits.length < 10 || digits.length > 13 || seen.includes(digits)) return;\n    seen.push(digits);\n    list.push(String(p).trim());\n  };\n  (h.match(/href=[\"']tel:([^\"']+)[\"']/gi) || []).forEach((m) => {\n    let v = m.replace(/href=[\"']tel:/i, '').replace(/[\"']$/, '');\n    try { v = decodeURIComponent(v); } catch (e) { /* keep raw */ }\n    add(v);\n  });\n  (visible(h).match(/(?:\\+44\\s?\\(?0?\\)?\\s?|\\b0)\\d[\\d\\s\\-()]{8,12}\\d/g) || []).forEach(add);\n  return list;\n};\n\nlet email = '', phone = '', form = '';\nif (identity) {\n  const emails = [...findEmails(contact), ...findEmails(home)];\n  email = emails.find((e) => host && e.endsWith(host)) || emails[0] || '';\n  phone = [...findPhones(contact), ...findPhones(home)][0] || '';\n  form = ctx.contactUrl && /<form/i.test(contact) ? ctx.contactUrl : '';\n}\n\n// 3) Lead_Status\nlet status;\nif (!ctx.website) status = 'Needs_Contact';\nelse if (!identity) status = 'Needs_Check';\nelse if (email || phone || form) status = 'Ready';\nelse status = 'Needs_Contact';\n\n// Upcoming ki date guzar chuki ho to fresh confirmation chahiye\nif (ctx.Opening_Status === 'Upcoming' && ctx.Opening_Date) {\n  const d = new Date(ctx.Opening_Date);\n  if (!isNaN(d) && d < new Date(today)) status = 'Needs_Check';\n}\n\n// 4) Venue-level duplicate: purana record ho to blank se overwrite nahi hoga\nconst key = [ctx.Business_Name, ctx.City, ctx.Location].map(clean).join('|');\nconst ex = $('Read Business_Leads').all().map((i) => i.json).find((r) => r.Venue_Key && r.Venue_Key === key) || null;\nconst pick = (n, o) => (n !== undefined && n !== null && String(n).trim() !== '' ? n : (o || ''));\nif (ex && ex.Lead_Status === 'Ready' && status === 'Needs_Contact') status = 'Ready';\n\nreturn {\n  json: {\n    Business_Name: pick(ctx.Business_Name, ex && ex.Business_Name),\n    City: pick(ctx.City, ex && ex.City),\n    Business_Type: pick(ctx.Business_Type, ex && ex.Business_Type),\n    Location: pick(ctx.Location, ex && ex.Location),\n    Opening_Status: pick(ctx.Opening_Status, ex && ex.Opening_Status),\n    Opening_Date: pick(ctx.Opening_Date, ex && ex.Opening_Date),\n    Website: pick(ctx.website, ex && ex.Website),\n    Email: pick(email, ex && ex.Email),\n    Phone: pick(phone, ex && ex.Phone),\n    Contact_Form_URL: pick(form, ex && ex.Contact_Form_URL),\n    Source_URL: ex && ex.Source_URL ? ex.Source_URL : (ctx.Source_URL || ''),\n    Lead_Status: status,\n    Last_Checked: today,\n    Venue_Key: key,\n  },\n};"
+      },
+      "id": "e29ed13c-9fe7-4578-bf97-2b3064ae06bf",
+      "name": "Build Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2192,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Business_Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "Venue_Key"
+          ],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "4219bcbd-4c16-4f78-83ee-79a743fa1b4b",
+      "name": "Save to Business_Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2432,
+        512
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HOGPL2ZStkAecwIj",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return $('Pick Approved').all().map((i) => ({\n  json: { Candidate_ID: i.json.Candidate_ID, Processed: 'Yes' },\n}));"
+      },
+      "id": "d9e15229-43f0-4e89-8880-c32d232652ba",
+      "name": "Mark Processed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2592,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.sheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Opening_Candidates",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "Candidate_ID"
+          ],
+          "schema": [
+            {
+              "id": "Candidate_ID",
+              "displayName": "Candidate_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Search_ID",
+              "displayName": "Search_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "City",
+              "displayName": "City",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Keyword",
+              "displayName": "Keyword",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Mode",
+              "displayName": "Mode",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Title",
+              "displayName": "Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Snippet",
+              "displayName": "Snippet",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Source_URL",
+              "displayName": "Source_URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Source_Date",
+              "displayName": "Source_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Found_On",
+              "displayName": "Found_On",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Review_Status",
+              "displayName": "Review_Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Business_Name",
+              "displayName": "Business_Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Location",
+              "displayName": "Location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Opening_Date",
+              "displayName": "Opening_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Reviewer_Notes",
+              "displayName": "Reviewer_Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Processed",
+              "displayName": "Processed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "f5cafa93-b963-4483-bcd9-e850e28f37e5",
+      "name": "Update Opening_Candidates",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2736,
+        512
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HOGPL2ZStkAecwIj",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "# Workflow 3 — Contact Enrichment\n\n**What it does:** This workflow takes only the **Approved** candidates, finds their official websites, and collects publicly available contact details like email addresses, phone numbers, and contact forms. It then saves these details in the `Business_Leads` tab.\n\n**Limit:** Each run can process up to **5 businesses**. You can change this limit in `Run_Config > Contacts_Per_Run`.\n\n**Lead Status:**\n- `Ready` — Contact details were found.\n- `Needs_Contact` — No contact details were found.\n- `Needs_Check` — The website, business identity, or opening date needs to be checked.\n\n**Important:** The workflow only saves real contact details it finds. It does not create or guess any email addresses or phone numbers.",
+        "height": 290,
+        "width": 1250,
+        "color": "#BDCBFF"
+      },
+      "id": "f3bd584f-380e-49ec-865b-b87b800e6f49",
+      "name": "Sticky 16",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "##  Start\nManual Trigger.",
+        "height": 348,
+        "width": 260,
+        "color": 7
+      },
+      "id": "e55d1f21-3da5-411a-b353-e8457cbdbd16",
+      "name": "Sticky 17",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 1. Read Config and Data\n\nFirst, open the **Config** node and paste your Google Sheet ID.\n\nThen, select your Google account credentials in all Google Sheets nodes.",
+        "height": 348,
+        "width": 560,
+        "color": 5
+      },
+      "id": "9b246c04-8b2c-4261-8ca8-ed1177ff5e39",
+      "name": "Sticky 18",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        272,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 2. Get Approved Businesses\n\nPick only the businesses where `Review_Status` is `Approved`, `Processed` is empty, and `Business_Name` is filled in.\n\nMake sure the same business is selected only once in each run.",
+        "height": 348,
+        "width": 260,
+        "color": "#F4F1C3"
+      },
+      "id": "03f692d0-b84d-48ac-93ac-4888066d5125",
+      "name": "Sticky 19",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        864,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 3. Find the Official Website\n\nSearch for the business on Google. Skip social media and directory websites, and select the first genuine official business website.",
+        "height": 348,
+        "width": 500,
+        "color": 2
+      },
+      "id": "cd45ac82-189f-4340-a0d1-7c9a86fd0ab5",
+      "name": "Sticky 20",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 4. Check the Website\n\nOpen the homepage and contact page to find the business details.\n\nFirst, check if the business name appears on the homepage to make sure it is the correct website. Only then save the email, phone number, or contact form.\n\nIf the website does not open or has any issues, the workflow will continue without stopping. The lead will be marked as `Needs_Check` or `Needs_Contact`.",
+        "height": 348,
+        "width": 676,
+        "color": "#FDBAFB"
+      },
+      "id": "c1a2cdc1-0ad4-41d3-a47d-7201458692f3",
+      "name": "Sticky 21",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1664,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 5. Save and Check for Duplicates\n\nBefore saving, check if the same business already exists in the same city and location.\n\nIf it already exists, update the existing lead instead of creating a new one. Make sure empty values do not replace existing information.\n\nOnce the lead is successfully saved, mark the candidate as `Processed = Yes`.",
+        "height": 348,
+        "width": 552,
+        "color": "#BDF5FF"
+      },
+      "id": "20c1fe39-830e-4c48-9364-51c6a4603c64",
+      "name": "Sticky 22",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2352,
+        336
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Read Run_Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Run_Config": {
+      "main": [
+        [
+          {
+            "node": "Read Opening_Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Opening_Candidates": {
+      "main": [
+        [
+          {
+            "node": "Read Business_Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Business_Leads": {
+      "main": [
+        [
+          {
+            "node": "Pick Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Approved": {
+      "main": [
+        [
+          {
+            "node": "Search Website",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Website": {
+      "main": [
+        [
+          {
+            "node": "Pick Website",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Website": {
+      "main": [
+        [
+          {
+            "node": "Fetch Homepage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Homepage": {
+      "main": [
+        [
+          {
+            "node": "Find Contact Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Contact Page": {
+      "main": [
+        [
+          {
+            "node": "Fetch Contact Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Contact Page": {
+      "main": [
+        [
+          {
+            "node": "Build Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Lead": {
+      "main": [
+        [
+          {
+            "node": "Save to Business_Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to Business_Leads": {
+      "main": [
+        [
+          {
+            "node": "Mark Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Processed": {
+      "main": [
+        [
+          {
+            "node": "Update Opening_Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "f8ad6df1-81cd-4082-97eb-5bda038ac1bf",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9b00b285939f3e60f6172b7f7d664e90fce7b6be40851e99f4ec1c23a3299d9b"
+  },
+  "nodeGroups": [],
+  "id": "DLdMvMta0gyYSN29",
+  "tags": []
+}
